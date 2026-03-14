@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Classroom — Attention Dashboard</title>
+    <meta name="description" content="Real-time attention monitoring dashboard for smart classroom environments." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        /* ═══════════════════════════════════════════════════
+           RESET & BASE
+           ═══════════════════════════════════════════════════ */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg:          #0b0e17;
+            --surface:     rgba(255,255,255,0.04);
+            --glass:       rgba(255,255,255,0.06);
+            --glass-border:rgba(255,255,255,0.10);
+            --text:        #e4e6f0;
+            --text-dim:    #8a8fa8;
+            --accent:      #6c63ff;
+            --accent-glow: rgba(108,99,255,0.35);
+            --green:       #34d399;
+            --yellow:      #fbbf24;
+            --red:         #f87171;
+            --radius:      16px;
+            --radius-sm:   10px;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* animated gradient accent behind header */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -40%; left: -20%;
+            width: 140%; height: 80%;
+            background: radial-gradient(ellipse at 30% 50%, rgba(108,99,255,0.12) 0%, transparent 60%),
+                        radial-gradient(ellipse at 70% 40%, rgba(52,211,153,0.08) 0%, transparent 55%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           HEADER
+           ═══════════════════════════════════════════════════ */
+        header {
+            position: relative; z-index: 1;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 20px 32px;
+            border-bottom: 1px solid var(--glass-border);
+            backdrop-filter: blur(18px);
+            background: var(--surface);
+        }
+        .logo {
+            display: flex; align-items: center; gap: 12px;
+            font-size: 1.35rem; font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .logo-icon {
+            width: 38px; height: 38px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent), #34d399);
+            display: grid; place-items: center;
+            font-size: 1.1rem;
+        }
+        .session-clock {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           LAYOUT
+           ═══════════════════════════════════════════════════ */
+        .dashboard {
+            position: relative; z-index: 1;
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            grid-template-rows: auto auto 1fr;
+            gap: 20px;
+            padding: 24px 32px 40px;
+            max-width: 1440px;
+            margin: 0 auto;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           GLASS CARD
+           ═══════════════════════════════════════════════════ */
+        .card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 20px;
+            backdrop-filter: blur(14px);
+            transition: box-shadow .3s ease, border-color .3s ease;
+        }
+        .card:hover {
+            border-color: rgba(255,255,255,0.16);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+        }
+        .card-title {
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--text-dim);
+            margin-bottom: 14px;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           CAMERA PANEL
+           ═══════════════════════════════════════════════════ */
+        .camera-panel {
+            grid-column: 1;
+            grid-row: 1 / 3;
+        }
+        .camera-panel img {
+            width: 100%;
+            border-radius: var(--radius-sm);
+            display: block;
+            background: #111;
+            aspect-ratio: 4/3;
+            object-fit: cover;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           SCORE RING
+           ═══════════════════════════════════════════════════ */
+        .score-card {
+            grid-column: 2;
+            grid-row: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+        }
+        .score-ring-wrap {
+            position: relative;
+            width: 170px; height: 170px;
+        }
+        .score-ring-wrap svg {
+            width: 100%; height: 100%;
+            transform: rotate(-90deg);
+        }
+        .ring-bg {
+            fill: none;
+            stroke: rgba(255,255,255,0.06);
+            stroke-width: 10;
+        }
+        .ring-fg {
+            fill: none;
+            stroke-width: 10;
+            stroke-linecap: round;
+            transition: stroke-dashoffset .6s ease, stroke .4s ease;
+        }
+        .score-value {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .score-number {
+            font-size: 2.8rem;
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: -2px;
+            transition: color .4s ease;
+        }
+        .score-label {
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 4px;
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center; gap: 7px;
+            padding: 6px 18px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            transition: background .4s ease, color .4s ease;
+        }
+        .status-badge .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            animation: pulse-dot 2s infinite;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: .4; }
+        }
+
+        /* ═══════════════════════════════════════════════════
+           METRIC CARDS
+           ═══════════════════════════════════════════════════ */
+        .metrics-strip {
+            grid-column: 2;
+            grid-row: 2;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .metric {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            transition: border-color .3s;
+        }
+        .metric:hover { border-color: rgba(255,255,255,0.16); }
+        .metric-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+        }
+        .metric-value {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           CHART
+           ═══════════════════════════════════════════════════ */
+        .chart-panel {
+            grid-column: 1;
+            grid-row: 3;
+        }
+        .chart-panel canvas {
+            width: 100% !important;
+            max-height: 260px;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           LOG TABLE
+           ═══════════════════════════════════════════════════ */
+        .log-panel {
+            grid-column: 2;
+            grid-row: 3;
+            display: flex;
+            flex-direction: column;
+            max-height: 340px;
+        }
+        .log-scroll {
+            flex: 1;
+            overflow-y: auto;
+            margin-top: 6px;
+        }
+        .log-scroll::-webkit-scrollbar { width: 5px; }
+        .log-scroll::-webkit-scrollbar-track { background: transparent; }
+        .log-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 10px; }
+
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.72rem;
+        }
+        .log-table th {
+            position: sticky; top: 0;
+            background: #14172a;
+            text-align: left;
+            padding: 8px 8px;
+            color: var(--text-dim);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .log-table td {
+            padding: 7px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            white-space: nowrap;
+        }
+        .log-table tr:hover td { background: rgba(255,255,255,0.03); }
+
+        /* ═══════════════════════════════════════════════════
+           ALERT BANNER
+           ═══════════════════════════════════════════════════ */
+        .alert-banner {
+            position: fixed;
+            bottom: -80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #dc2626, #ef4444);
+            color: #fff;
+            padding: 14px 40px;
+            border-radius: 14px;
+            font-weight: 700;
+            font-size: 1rem;
+            letter-spacing: 0.3px;
+            box-shadow: 0 8px 40px rgba(239,68,68,0.45);
+            transition: bottom .5s cubic-bezier(.34,1.56,.64,1);
+            z-index: 100;
+        }
+        .alert-banner.visible {
+            bottom: 28px;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           RESPONSIVE
+           ═══════════════════════════════════════════════════ */
+        @media (max-width: 920px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+                padding: 16px;
+            }
+            .camera-panel   { grid-column: 1; grid-row: auto; }
+            .score-card     { grid-column: 1; grid-row: auto; }
+            .metrics-strip  { grid-column: 1; grid-row: auto; }
+            .chart-panel    { grid-column: 1; grid-row: auto; }
+            .log-panel      { grid-column: 1; grid-row: auto; max-height: 300px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ═══════════════════ HEADER ═══════════════════ -->
+    <header>
+        <div class="logo">
+            <div class="logo-icon">🎓</div>
+            Smart Classroom — Attention Dashboard
+        </div>
+        <div class="session-clock" id="clock">--:--:--</div>
+    </header>
+
+    <!-- ═══════════════════ DASHBOARD ═══════════════════ -->
+    <div class="dashboard">
+
+        <!-- CAMERA FEED -->
+        <div class="card camera-panel">
+            <div class="card-title">📷 Live Camera Feed</div>
+            <img id="camera-feed" src="/video_feed" alt="Live webcam feed" />
+        </div>
+
+        <!-- SCORE RING -->
+        <div class="card score-card">
+            <div class="card-title">Attention Score</div>
+            <div class="score-ring-wrap">
+                <svg viewBox="0 0 120 120">
+                    <circle class="ring-bg" cx="60" cy="60" r="52" />
+                    <circle class="ring-fg" id="ring" cx="60" cy="60" r="52"
+                        stroke-dasharray="326.73"
+                        stroke-dashoffset="326.73" />
+                </svg>
+                <div class="score-value">
+                    <span class="score-number" id="score-num">--</span>
+                    <span class="score-label">/ 100</span>
+                </div>
+            </div>
+            <div class="status-badge" id="status-badge">
+                <span class="dot"></span>
+                <span id="status-text">---</span>
+            </div>
+        </div>
+
+        <!-- METRIC CARDS -->
+        <div class="metrics-strip">
+            <div class="metric">
+                <span class="metric-label">👁️ Gaze</span>
+                <span class="metric-value" id="m-gaze">---</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">🗣️ Head Pose</span>
+                <span class="metric-value" id="m-head">---</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">💧 Blink Rate</span>
+                <span class="metric-value" id="m-blink">-- /min</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">📐 EAR</span>
+                <span class="metric-value" id="m-ear">--</span>
+            </div>
+        </div>
+
+        <!-- CHART -->
+        <div class="card chart-panel">
+            <div class="card-title">📈 Score Timeline</div>
+            <canvas id="score-chart"></canvas>
+        </div>
+
+        <!-- LOG TABLE -->
+        <div class="card log-panel">
+            <div class="card-title">📋 Session Log</div>
+            <div class="log-scroll">
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Score</th>
+                            <th>Status</th>
+                            <th>Gaze</th>
+                            <th>Head</th>
+                        </tr>
+                    </thead>
+                    <tbody id="log-body">
+                        <tr><td colspan="5" style="color:var(--text-dim)">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ALERT BANNER -->
+    <div class="alert-banner" id="alert-banner">⚠️ &nbsp;Attention is low — please focus!</div>
+
+    <!-- ═══════════════════ JS ═══════════════════ -->
+    <script>
+    (function () {
+        /* ── DOM refs ────────────────────────────────── */
+        const scoreNum   = document.getElementById('score-num');
+        const ring       = document.getElementById('ring');
+        const statusBadge= document.getElementById('status-badge');
+        const statusText = document.getElementById('status-text');
+        const mGaze      = document.getElementById('m-gaze');
+        const mHead      = document.getElementById('m-head');
+        const mBlink     = document.getElementById('m-blink');
+        const mEar       = document.getElementById('m-ear');
+        const logBody    = document.getElementById('log-body');
+        const alertBanner= document.getElementById('alert-banner');
+        const clockEl    = document.getElementById('clock');
+
+        const CIRCUMFERENCE = 2 * Math.PI * 52;  // ring radius=52
+        ring.style.strokeDasharray = CIRCUMFERENCE;
+
+        /* ── Colour helpers ──────────────────────────── */
+        function scoreColor(s) {
+            if (s >= 70) return '#34d399';
+            if (s >= 45) return '#fbbf24';
+            return '#f87171';
+        }
+        function statusStyle(st) {
+            switch (st) {
+                case 'Attentive':  return { bg:'rgba(52,211,153,0.12)', fg:'#34d399' };
+                case 'Distracted': return { bg:'rgba(251,191,36,0.12)', fg:'#fbbf24' };
+                case 'Sleepy':     return { bg:'rgba(248,113,113,0.12)',fg:'#f87171' };
+                default:           return { bg:'rgba(255,255,255,0.06)',fg:'#e4e6f0' };
+            }
+        }
+
+        /* ── Chart setup ─────────────────────────────── */
+        const ctx = document.getElementById('score-chart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Attention Score',
+                    data: [],
+                    borderColor: '#6c63ff',
+                    backgroundColor: 'rgba(108,99,255,0.08)',
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#6c63ff',
+                    borderWidth: 2.5,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 400 },
+                scales: {
+                    y: {
+                        min: 0, max: 100,
+                        ticks: { color: '#8a8fa8', font: { size: 10 } },
+                        grid: { color: 'rgba(255,255,255,0.04)' },
+                    },
+                    x: {
+                        ticks: { color: '#8a8fa8', font: { size: 9 }, maxRotation: 0, maxTicksLimit: 10 },
+                        grid: { display: false },
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1a1d30',
+                        titleColor: '#e4e6f0',
+                        bodyColor: '#e4e6f0',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        padding: 10,
+                        cornerRadius: 8,
+                    }
+                }
+            }
+        });
+
+        /* ── Real-time data polling ──────────────────── */
+        async function fetchData() {
+            try {
+                const res = await fetch('/api/data');
+                const d   = await res.json();
+                if (!d || d.attention_score === undefined) return;
+
+                const s = d.attention_score;
+                const col = scoreColor(s);
+
+                // Score ring
+                scoreNum.textContent = s;
+                scoreNum.style.color = col;
+                ring.style.strokeDashoffset = CIRCUMFERENCE * (1 - s / 100);
+                ring.style.stroke = col;
+
+                // Status badge
+                const ss = statusStyle(d.status);
+                statusBadge.style.background = ss.bg;
+                statusBadge.style.color      = ss.fg;
+                statusBadge.querySelector('.dot').style.background = ss.fg;
+                statusText.textContent = d.status || '---';
+
+                // Metric cards
+                mGaze.textContent  = d.gaze_direction || '---';
+                mHead.textContent  = d.head_pose || '---';
+                mBlink.textContent = (d.blink_rate ?? '--') + ' /min';
+                mEar.textContent   = d.ear ?? '--';
+
+                // Alert
+                if (d.alert) alertBanner.classList.add('visible');
+                else         alertBanner.classList.remove('visible');
+
+                // Push to chart (keep last 50)
+                const now = new Date().toLocaleTimeString();
+                chart.data.labels.push(now);
+                chart.data.datasets[0].data.push(s);
+                if (chart.data.labels.length > 50) {
+                    chart.data.labels.shift();
+                    chart.data.datasets[0].data.shift();
+                }
+                chart.update('none');
+            } catch (e) { /* silently retry */ }
+        }
+
+        /* ── History log ─────────────────────────────── */
+        async function fetchHistory() {
+            try {
+                const res  = await fetch('/api/history');
+                const rows = await res.json();
+                if (!rows.length) { logBody.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No data yet</td></tr>'; return; }
+
+                logBody.innerHTML = rows.map(r => {
+                    const ss = statusStyle(r.status);
+                    return `<tr>
+                        <td>${r.timestamp || ''}</td>
+                        <td style="font-weight:600;color:${scoreColor(Number(r.attention_score))}">${r.attention_score}</td>
+                        <td style="color:${ss.fg}">${r.status}</td>
+                        <td>${r.gaze_direction}</td>
+                        <td>${r.head_pose}</td>
+                    </tr>`;
+                }).join('');
+            } catch (e) { /* silently retry */ }
+        }
+
+        /* ── Clock ───────────────────────────────────── */
+        function updateClock() {
+            clockEl.textContent = new Date().toLocaleTimeString();
+        }
+
+        /* ── Start loops ─────────────────────────────── */
+        setInterval(fetchData,   500);     // live metrics every 0.5 s
+        setInterval(fetchHistory, 6000);   // history table every 6 s
+        setInterval(updateClock,  1000);
+        fetchData();
+        fetchHistory();
+        updateClock();
+    })();
+    </script>
+</body>
+</html>
