@@ -24,7 +24,7 @@ HEAD_WEIGHT       = 0.10   # 10 %
 NORMAL_BLINK_RATE = 15     # blinks per minute (healthy baseline)
 MAX_BLINK_RATE    = 30     # above this is considered very high (sleepiness)
 
-SLEEP_EAR_FRAMES  = 90     # ~3 seconds at 30 fps → classified as "Sleepy"
+SLEEP_EAR_FRAMES  = 60     # ~2 seconds at 30 fps → classified as "Sleepy"
 ALERT_THRESHOLD   = 40     # attention score below this triggers a warning
 ALERT_DURATION    = 5.0    # seconds the score must stay below threshold before alert fires
 
@@ -67,6 +67,7 @@ class AttentionAnalyser:
         ear: float,
         eyes_closed: bool,
         new_blink: bool,
+        has_face: bool = True,
     ) -> dict:
         """
         Call once per frame with the outputs from EyeTracker.
@@ -92,26 +93,47 @@ class AttentionAnalyser:
         else:
             self._closed_frame_count = 0
 
-        # ── Individual component scores (each 0-1) ─────────
-        gaze_score  = self._score_gaze(gaze_direction)
-        blink_score = self._score_blink()
-        head_score  = self._score_head(head_pose)
+        if not has_face:
+            self._score_history.clear()
+            raw = 0.0
+            smooth_score = 0
+            status = "No Face"
+            alert = True
+            
+            # Reset alert timer when no face so a real face gets 5s grace period again
+            self._below_threshold_since = -1.0
+            self._alert_active = True
+        elif self._closed_frame_count >= SLEEP_EAR_FRAMES:
+            self._score_history.clear()
+            raw = 0.0
+            smooth_score = 0
+            status = "Sleepy"
+            alert = True
+            
+            # Ensure the alert hits instantly instead of waiting 5s
+            self._below_threshold_since = -1.0
+            self._alert_active = True
+        else:
+            # ── Component scores (each 0-1) ─────────
+            gaze_score  = self._score_gaze(gaze_direction)
+            blink_score = self._score_blink()
+            head_score  = self._score_head(head_pose)
 
-        # ── Combine into raw score ─────────────────────────
-        raw = (gaze_score * GAZE_WEIGHT
-             + blink_score * BLINK_WEIGHT
-             + head_score  * HEAD_WEIGHT) * 100
+            # ── Combine into raw score ─────────────────────────
+            raw = (gaze_score * GAZE_WEIGHT
+                 + blink_score * BLINK_WEIGHT
+                 + head_score  * HEAD_WEIGHT) * 100
 
-        # ── Smooth score ───────────────────────────────────
-        self._score_history.append(raw)
-        smooth_score = int(sum(self._score_history) / len(self._score_history))
-        smooth_score = max(0, min(100, smooth_score))   # clamp to [0, 100]
+            # ── Smooth score ───────────────────────────────────
+            self._score_history.append(raw)
+            smooth_score = int(sum(self._score_history) / len(self._score_history))
+            smooth_score = max(0, min(100, smooth_score))   # clamp to [0, 100]
 
-        # ── Status label ──────────────────────────────────
-        status = self._determine_status(smooth_score, gaze_direction)
+            # ── Status label ──────────────────────────────────
+            status = self._determine_status(smooth_score, gaze_direction)
 
-        # ── Alert logic ───────────────────────────────────
-        alert = self._check_alert(smooth_score, now)
+            # ── Alert logic ───────────────────────────────────
+            alert = self._check_alert(smooth_score, now)
 
         blink_rate: float = self._current_blink_rate(now)
         blink_rate_rounded: float = int(blink_rate * 10) / 10.0

@@ -34,8 +34,10 @@
             font-family: 'Inter', system-ui, sans-serif;
             background: var(--bg);
             color: var(--text);
-            min-height: 100vh;
-            overflow-x: hidden;
+            height: 100vh;
+            overflow: hidden; /* Stop page scrolling */
+            display: flex;
+            flex-direction: column;
         }
 
         /* animated gradient accent behind header */
@@ -56,10 +58,12 @@
         header {
             position: relative; z-index: 1;
             display: flex; align-items: center; justify-content: space-between;
-            padding: 20px 32px;
+            padding: 16px 32px; /* Slight height reduction */
             border-bottom: 1px solid var(--glass-border);
             backdrop-filter: blur(18px);
             background: var(--surface);
+            height: 70px; /* Fixed height for header */
+            flex-shrink: 0;
         }
         .logo {
             display: flex; align-items: center; gap: 12px;
@@ -85,12 +89,23 @@
         .dashboard {
             position: relative; z-index: 1;
             display: grid;
-            grid-template-columns: 1fr 380px;
-            grid-template-rows: auto auto 1fr;
+            grid-template-columns: minmax(0, 1.2fr) 350px 420px;
+            grid-template-rows: minmax(0, 1fr);
             gap: 20px;
-            padding: 24px 32px 40px;
-            max-width: 1440px;
+            padding: 20px 32px;
+            max-width: 1600px;
             margin: 0 auto;
+            width: 100%;
+            flex: 1;
+            min-height: 0; /* Let flex box shrink */
+        }
+        
+        /* Middle wrapper for score + metrics */
+        .mid-col, .right-col {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-height: 0;
         }
 
         /* ═══════════════════════════════════════════════════
@@ -122,27 +137,30 @@
            ═══════════════════════════════════════════════════ */
         .camera-panel {
             grid-column: 1;
-            grid-row: 1 / 3;
+            grid-row: 1;
+            display: flex;
+            flex-direction: column;
         }
         .camera-panel img {
             width: 100%;
+            height: 100%;
             border-radius: var(--radius-sm);
             display: block;
             background: #111;
-            aspect-ratio: 4/3;
-            object-fit: cover;
+            object-fit: contain; /* Don't stretch or break wrapper */
+            min-height: 0; /* For flex container */
         }
 
         /* ═══════════════════════════════════════════════════
            SCORE RING
            ═══════════════════════════════════════════════════ */
         .score-card {
-            grid-column: 2;
-            grid-row: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 14px;
+            flex: 1; /* Stretch nicely */
+            justify-content: center;
         }
         .score-ring-wrap {
             position: relative;
@@ -209,11 +227,10 @@
            METRIC CARDS
            ═══════════════════════════════════════════════════ */
         .metrics-strip {
-            grid-column: 2;
-            grid-row: 2;
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 12px;
+            flex-shrink: 0;
         }
         .metric {
             background: var(--glass);
@@ -242,23 +259,22 @@
            CHART
            ═══════════════════════════════════════════════════ */
         .chart-panel {
-            grid-column: 1;
-            grid-row: 3;
+            flex-shrink: 0;
+            height: 240px;
         }
         .chart-panel canvas {
             width: 100% !important;
-            max-height: 260px;
+            height: 100% !important;
         }
 
         /* ═══════════════════════════════════════════════════
            LOG TABLE
            ═══════════════════════════════════════════════════ */
         .log-panel {
-            grid-column: 2;
-            grid-row: 3;
             display: flex;
             flex-direction: column;
-            max-height: 340px;
+            flex: 1;
+            min-height: 0;
         }
         .log-scroll {
             flex: 1;
@@ -318,16 +334,17 @@
         /* ═══════════════════════════════════════════════════
            RESPONSIVE
            ═══════════════════════════════════════════════════ */
-        @media (max-width: 920px) {
+        @media (max-width: 1100px) {
+            body { overflow-y: auto; height: auto; }
             .dashboard {
                 grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto;
                 padding: 16px;
+                display: flex;
+                flex-direction: column;
             }
-            .camera-panel   { grid-column: 1; grid-row: auto; }
-            .score-card     { grid-column: 1; grid-row: auto; }
-            .metrics-strip  { grid-column: 1; grid-row: auto; }
-            .chart-panel    { grid-column: 1; grid-row: auto; }
-            .log-panel      { grid-column: 1; grid-row: auto; max-height: 300px; }
+            .camera-panel img { aspect-ratio: 16/9; max-height: 60vh; width: 100%; object-fit: contain; }
+            .log-panel { max-height: 400px; }
         }
     </style>
 </head>
@@ -351,71 +368,79 @@
             <img id="camera-feed" src="/video_feed" alt="Live webcam feed" />
         </div>
 
-        <!-- SCORE RING -->
-        <div class="card score-card">
-            <div class="card-title">Attention Score</div>
-            <div class="score-ring-wrap">
-                <svg viewBox="0 0 120 120">
-                    <circle class="ring-bg" cx="60" cy="60" r="52" />
-                    <circle class="ring-fg" id="ring" cx="60" cy="60" r="52"
-                        stroke-dasharray="326.73"
-                        stroke-dashoffset="326.73" />
-                </svg>
-                <div class="score-value">
-                    <span class="score-number" id="score-num">--</span>
-                    <span class="score-label">/ 100</span>
+        <!-- MIDDLE COLUMN -->
+        <div class="mid-col">
+            <!-- SCORE RING -->
+            <div class="card score-card">
+                <div class="card-title">Attention Score</div>
+                <div class="score-ring-wrap">
+                    <svg viewBox="0 0 120 120">
+                        <circle class="ring-bg" cx="60" cy="60" r="52" />
+                        <circle class="ring-fg" id="ring" cx="60" cy="60" r="52"
+                            stroke-dasharray="326.73"
+                            stroke-dashoffset="326.73" />
+                    </svg>
+                    <div class="score-value">
+                        <span class="score-number" id="score-num">--</span>
+                        <span class="score-label">/ 100</span>
+                    </div>
+                </div>
+                <div class="status-badge" id="status-badge">
+                    <span class="dot"></span>
+                    <span id="status-text">---</span>
                 </div>
             </div>
-            <div class="status-badge" id="status-badge">
-                <span class="dot"></span>
-                <span id="status-text">---</span>
+
+            <!-- METRIC CARDS -->
+            <div class="metrics-strip">
+                <div class="metric">
+                    <span class="metric-label">👁️ Gaze</span>
+                    <span class="metric-value" id="m-gaze">---</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">🗣️ Head Pose</span>
+                    <span class="metric-value" id="m-head">---</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">💧 Blink Rate</span>
+                    <span class="metric-value" id="m-blink">-- /min</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">📐 EAR</span>
+                    <span class="metric-value" id="m-ear">--</span>
+                </div>
             </div>
         </div>
 
-        <!-- METRIC CARDS -->
-        <div class="metrics-strip">
-            <div class="metric">
-                <span class="metric-label">👁️ Gaze</span>
-                <span class="metric-value" id="m-gaze">---</span>
+        <!-- RIGHT COLUMN -->
+        <div class="right-col">
+            <!-- CHART -->
+            <div class="card chart-panel">
+                <div class="card-title">📈 Score Timeline</div>
+                <div style="height: calc(100% - 24px); width: 100%; position: relative;">
+                    <canvas id="score-chart"></canvas>
+                </div>
             </div>
-            <div class="metric">
-                <span class="metric-label">🗣️ Head Pose</span>
-                <span class="metric-value" id="m-head">---</span>
-            </div>
-            <div class="metric">
-                <span class="metric-label">💧 Blink Rate</span>
-                <span class="metric-value" id="m-blink">-- /min</span>
-            </div>
-            <div class="metric">
-                <span class="metric-label">📐 EAR</span>
-                <span class="metric-value" id="m-ear">--</span>
-            </div>
-        </div>
 
-        <!-- CHART -->
-        <div class="card chart-panel">
-            <div class="card-title">📈 Score Timeline</div>
-            <canvas id="score-chart"></canvas>
-        </div>
-
-        <!-- LOG TABLE -->
-        <div class="card log-panel">
-            <div class="card-title">📋 Session Log</div>
-            <div class="log-scroll">
-                <table class="log-table">
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Score</th>
-                            <th>Status</th>
-                            <th>Gaze</th>
-                            <th>Head</th>
-                        </tr>
-                    </thead>
-                    <tbody id="log-body">
-                        <tr><td colspan="5" style="color:var(--text-dim)">Loading…</td></tr>
-                    </tbody>
-                </table>
+            <!-- LOG TABLE -->
+            <div class="card log-panel">
+                <div class="card-title">📋 Session Log</div>
+                <div class="log-scroll">
+                    <table class="log-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Score</th>
+                                <th>Status</th>
+                                <th>Gaze</th>
+                                <th>Head</th>
+                            </tr>
+                        </thead>
+                        <tbody id="log-body">
+                            <tr><td colspan="5" style="color:var(--text-dim)">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

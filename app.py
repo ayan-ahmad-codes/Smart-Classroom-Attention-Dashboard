@@ -88,6 +88,7 @@ def _capture_loop():
             ear=ear,
             eyes_closed=tracker.eyes_closed(),
             new_blink=is_blink,
+            has_face=has_face,
         )
         data["ear"]         = int(ear * 1000) / 1000.0
         data["no_face"]     = not has_face
